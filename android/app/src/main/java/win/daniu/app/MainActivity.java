@@ -2,13 +2,14 @@ package win.daniu.app;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.OnBackPressedDispatcher;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
@@ -51,7 +52,7 @@ public class MainActivity extends BridgeActivity {
                 
                 // tel:/mailto: 等特殊协议 → 用系统 app
                 if (url.startsWith("tel:") || url.startsWith("mailto:") ||
-                    url.startsWith("geo:") || url.startsWith("sms:") ||
+                    url.startsWith("sms:") || url.startsWith("geo:") ||
                     url.startsWith("whatsapp:") || url.startsWith("intent:")) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -75,6 +76,29 @@ public class MainActivity extends BridgeActivity {
                     "  mo.observe(document.documentElement,{childList:true,subtree:true});" +
                     "})()"
                 );
+            }
+        });
+        
+        // 4. 载返回按钮处理：优先 WebView 回退
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    // 检查当前 URL 是否是首页
+                    String currentUrl = webView.getUrl();
+                    String baseUrl = "https://daniu.win";
+                    
+                    if (currentUrl != null && 
+                        !currentUrl.equals(baseUrl) && 
+                        !currentUrl.equals(baseUrl + "/") &&
+                        !currentUrl.equals(baseUrl + "/index.html")) {
+                        // 不是首页 → 回退到上一页
+                        webView.goBack();
+                    } else {
+                        // 已经是首页 → 回到 WebView 加载的首页
+                        webView.loadUrl(baseUrl);
+                    }
+                }
             }
         });
     }
