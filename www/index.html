@@ -4,6 +4,99 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>大牛家</title>
+<style>
+  /* Splash cover */
+  #splash {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #E8E8E8;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.3s ease;
+  }
+  #splash img {
+    width: 120px; height: 120px;
+    border-radius: 24px;
+  }
+  #splash.hidden { opacity: 0; pointer-events: none; }
+</style>
 </head>
-<body></body>
+<body>
+<div id="splash"><img src="icon.png" alt="大牛家"></div>
+
+<script>
+// ============================================================
+// Link Interceptor — 防止在 server.url 模式下跳出到外部浏览器
+// ============================================================
+
+// 1. 拦截所有 _blank 链接，改为当前窗口加载
+document.addEventListener('click', function(e) {
+  let target = e.target;
+  // 向上查找 <a> 标签
+  while (target && target !== document.body) {
+    if (target.tagName === 'A') {
+      if (target.getAttribute('target') === '_blank') {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = target.href;
+        return false;
+      }
+      break;
+    }
+    target = target.parentNode;
+  }
+}, true); // 使用 capture 阶段，优先执行
+
+// 2. 拦截 window.open，改为直接跳转
+(function() {
+  var originalOpen = window.open;
+  window.open = function(url) {
+    if (url && typeof url === 'string') {
+      window.location.href = url;
+      return window;
+    }
+    return originalOpen.apply(this, arguments);
+  };
+})();
+
+// 3. 拦截动态添加的 _blank（MutationObserver）
+var observer = new MutationObserver(function(mutations) {
+  mutations.forEach(function(mutation) {
+    mutation.addedNodes.forEach(function(node) {
+      if (node.nodeType === 1) { // Element node
+        if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+          node.removeAttribute('target');
+        }
+        // 递归处理子节点
+        var links = node.querySelectorAll ? node.querySelectorAll('a[target="_blank"]') : [];
+        links.forEach(function(link) {
+          link.removeAttribute('target');
+        });
+      }
+    });
+  });
+});
+observer.observe(document.documentElement || document.body, {
+  childList: true,
+  subtree: true
+});
+
+// 4. 隐藏 splash（延迟确保页面已加载）
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    var splash = document.getElementById('splash');
+    if (splash) splash.classList.add('hidden');
+    setTimeout(function() { if (splash) splash.remove(); }, 300);
+  }, 800);
+});
+
+// 备用：如果 load 没触发，3秒后强制隐藏
+setTimeout(function() {
+  var splash = document.getElementById('splash');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(function() { if (splash) splash.remove(); }, 300);
+  }
+}, 3000);
+</script>
+</body>
 </html>
