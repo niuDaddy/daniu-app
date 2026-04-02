@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+www/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Build outputs
+android/app/build/
+android/.gradle/
+android/.idea/
+android/*.apk
+
+# OS
+.DS_Store
+*.log

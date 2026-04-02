@@ -1,0 +1,16 @@
+{
+  "appId": "win.daniu.app",
+  "appName": "大牛家",
+  "webDir": "www",
+  "server": {
+    "url": "https://daniu.win",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "backgroundColor": "#E8E8E8",
+      "showSpinner": false
+    }
+  }
+}
