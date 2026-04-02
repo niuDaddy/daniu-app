@@ -1,35 +1,81 @@
 package win.daniu.app;
 
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
-import android.webkit.WebView;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebView;
+import android.webkit.WebChromeClient;
+import android.webkit.WebViewClient;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
+    
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        
         Bridge bridge = getBridge();
-        if (bridge != null) {
-            WebView webView = bridge.getWebView();
-            webView.setWebViewClient(new BridgeWebViewClient(bridge) {
-                @Override
-                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                    String url = request.getUrl().toString();
-
-                    // HTTP/HTTPS 链接强制在 WebView 内加载
-                    if (url.startsWith("http://") || url.startsWith("https://")) {
-                        view.loadUrl(url);
-                        return true;
-                    }
-
-                    // 其他协议（tel:, mailto: 等）交给默认处理
-                    return super.shouldOverrideUrlLoading(view, request);
+        if (bridge == null) return;
+        
+        final WebView webView = bridge.getWebView();
+        
+        // 1. 禁止多窗口 — 防止 target="_blank" 触发新窗口
+        webView.getSettings().setSupportMultipleWindows(false);
+        
+        // 2. 设置自定义 WebChromeClient — 拦截 onCreateWindow
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
+                // 拦截所有新窗口请求（target="_blank" / window.open）
+                // 不创建新窗口，直接返回 false
+                return false;
+            }
+        });
+        
+        // 3. 自定义 WebViewClient — 拦截所有链接加载
+        webView.setWebViewClient(new BridgeWebViewClient(bridge) {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                
+                // http/https 链接 → 强制当前窗口加载
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    view.loadUrl(url);
+                    return true;
                 }
-            });
-        }
+                
+                // tel:/mailto: 等特殊协议 → 用系统 app
+                if (url.startsWith("tel:") || url.startsWith("mailto:") ||
+                    url.startsWith("geo:") || url.startsWith("sms:") ||
+                    url.startsWith("whatsapp:") || url.startsWith("intent:")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(intent);
+                    } catch (Exception ignored) {}
+                    return true;
+                }
+                
+                return super.shouldOverrideUrlLoading(view, request);
+            }
+            
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // 注入 JS：移除所有 _blank，拦截 window.open
+                view.loadUrl(
+                    "javascript:(function(){" +
+                    "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
+                    "  window.open=function(url){window.location.href=url;return window;};" +
+                    "  var mo=new MutationObserver(function(muts){muts.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){if(n.tagName==='A'&&n.target==='_blank')n.removeAttribute('target');if(n.querySelectorAll)n.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target')});}});});});" +
+                    "  mo.observe(document.documentElement,{childList:true,subtree:true});" +
+                    "})()"
+                );
+            }
+        });
     }
 }
