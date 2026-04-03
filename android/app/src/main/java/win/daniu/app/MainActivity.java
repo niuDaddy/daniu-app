@@ -64,6 +64,23 @@ public class MainActivity extends BridgeActivity {
         // 3. 拦截所有 URL 加载
         webView.setWebViewClient(new BridgeWebViewClient(bridge) {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+                // GitHub 下载链接 → 用 Intent 跳 Chrome
+                if (url.contains("github.com") || url.contains("githubusercontent.com")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                        intent.setData(Uri.parse(url));
+                        startActivity(intent);
+                    } catch (Exception ignored) {}
+                    // 返回空响应，阻止 WebView 继续处理
+                    return new WebResourceResponse(null, null, null);
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+            
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 
