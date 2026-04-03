@@ -42,11 +42,13 @@ public class MainActivity extends BridgeActivity {
         // 1. 禁止多窗口
         webView.getSettings().setSupportMultipleWindows(false);
         
-        // 2. 拦截 onCreateWindow（_blank 链接）
+        // 2. 拦截 onCreateWindow（_blank / window.open）
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                return false;
+                // GitHub 链接 → 跳系统浏览器
+                // 通过 WebView 自身的 loadUrl 触发 shouldOverrideUrlLoading
+                return false; // 不创建新窗口，交给 shouldOverrideUrlLoading
             }
             
             @Override
@@ -65,10 +67,12 @@ public class MainActivity extends BridgeActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 
-                // GitHub 下载链接 → 跳系统浏览器
+                // GitHub 下载链接 → 用 Intent 跳系统浏览器（Chrome）
                 if (url.contains("github.com") || url.contains("githubusercontent.com")) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                        intent.setData(Uri.parse(url));
                         startActivity(intent);
                     } catch (Exception ignored) {}
                     return true;
@@ -112,11 +116,7 @@ public class MainActivity extends BridgeActivity {
                     "javascript:(function(){" +
                     // 拦截 _blank 链接
                     "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
-                    // 拦截 window.open，但 GitHub 链接跳系统浏览器
-                    "  window.open=function(url){" +
-                    "    if(url && (url.indexOf('github.com')!==-1||url.indexOf('githubusercontent.com')!==-1)){window.open(url,'_blank');return window;}" +
-                    "    window.location.href=url;return window;" +
-                    "  };" +
+                    // window.open 保持原样（由 Android Intent 处理）
                     // MutationObserver 拦截动态 _blank
                     "  var mo=new MutationObserver(function(muts){muts.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){if(n.tagName==='A'&&n.target==='_blank')n.removeAttribute('target');if(n.querySelectorAll)n.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target')});}});});});" +
                     "  mo.observe(document.documentElement,{childList:true,subtree:true});" +
