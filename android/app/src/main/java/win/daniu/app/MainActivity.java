@@ -1,11 +1,13 @@
 package win.daniu.app;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.shapes.RoundRectShape;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
@@ -13,7 +15,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.ProgressBar;
+import android.widget.ImageButton;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.Bridge;
@@ -22,10 +24,8 @@ import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
     
-    /** 是否正在刷新 */
     private boolean isRefreshing = false;
-    /** 上次刷新时间（防抖动） */
-    private long lastRefreshTime = 0;
+    private ImageButton refreshBtn;
     
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -35,10 +35,10 @@ public class MainActivity extends BridgeActivity {
         Bridge bridge = getBridge();
         if (bridge == null) return;
         
-        final RefreshWebView webView = new RefreshWebView(this);
+        final WebView webView = bridge.getWebView();
         
-        // 创建覆盖层
-        createRefreshOverlay(webView);
+        // 创建右上角刷新按钮
+        createRefreshButton(webView);
         
         // 1. 禁止多窗口
         webView.getSettings().setSupportMultipleWindows(false);
@@ -48,6 +48,18 @@ public class MainActivity extends BridgeActivity {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
                 return false;
+            }
+            
+            @Override
+            public void onProgressChanged(WebView view, int newProgress) {
+                super.onProgressChanged(view, newProgress);
+                if (newProgress == 100 && isRefreshing) {
+                    isRefreshing = false;
+                    Toast.makeText(MainActivity.this, "✅ 刷新完成", Toast.LENGTH_SHORT).show();
+                    if (refreshBtn != null) {
+                        refreshBtn.setImageResource(android.R.drawable.ic_menu_rotate);
+                    }
+                }
             }
         });
         
@@ -78,14 +90,11 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                isRefreshing = true;
             }
             
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                isRefreshing = false;
-                hideRefreshOverlay();
                 
                 // 注入 JS
                 view.loadUrl(
@@ -120,93 +129,44 @@ public class MainActivity extends BridgeActivity {
         });
     }
     
-    /** 自定义 WebView：检测下拉动作并触发刷新 */
-    private class RefreshWebView extends WebView {
+    /** 创建右上角刷新按钮 */
+    private void createRefreshButton(final WebView webView) {
+        refreshBtn = new ImageButton(this);
+        refreshBtn.setImageResource(android.R.drawable.ic_menu_rotate);
+        refreshBtn.setBackgroundColor(0x00000000);
+        refreshBtn.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        refreshBtn.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
         
-        private RefreshWebView(Context context) {
-            super(context);
-            setOverScrollMode(WebView.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        }
+        final FrameLayout root = new FrameLayout(MainActivity.this);
+        root.setLayoutParams(new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
         
-        @Override
-        public void overScroll(int scrollX, int scrollY, int clampedX, int clampedY,
-                               int maxOverScrollX, int maxOverScrollY, boolean clippedY) {
-            super.overScroll(scrollX, scrollY, clampedX, clampedY,
-                           maxOverScrollX, maxOverScrollY, clippedY);
-            
-            // scrollY < 0 表示下拉（overscroll 向上拉）
-            // clampedY = true 表示被卡住，不能继续往下拉
-            // 防止抖动：距离上次刷新超过 1 秒才触发
-            if (scrollY < 0 && clampedY && !isRefreshing) {
-                long now = System.currentTimeMillis();
-                if (now - lastRefreshTime > 1000) {
-                    lastRefreshTime = now;
-                    performRefresh();
-                }
+        // 点击刷新
+        refreshBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                isRefreshing = true;
+                Toast.makeText(MainActivity.this, "🔄 正在刷新...", Toast.LENGTH_SHORT).show();
+                webView.reload();
+            }
+        });
+        
+        // 找到内容视图并在其上叠加按钮
+        View contentView = findViewById(android.R.id.content);
+        if (contentView != null) {
+            ViewGroup parent = (ViewGroup) contentView.getParent();
+            if (parent != null) {
+                FrameLayout.LayoutParams btnParams = new FrameLayout.LayoutParams(
+                    dpToPx(48), dpToPx(48)
+                );
+                btnParams.gravity = Gravity.TOP | Gravity.END;
+                btnParams.topMargin = dpToPx(4);
+                btnParams.rightMargin = dpToPx(4);
+                parent.addView(refreshBtn, btnParams);
             }
         }
-        
-        private void performRefresh() {
-            // 显示刷新动画
-            isRefreshing = true;
-            showRefreshOverlay();
-            
-            // 触发刷新
-            reload();
-            
-            // Toast 确认
-            Toast.makeText(MainActivity.this, "🔄 正在刷新...", Toast.LENGTH_SHORT).show();
-        }
-    }
-    
-    // --- 刷新覆盖层 ---
-    private FrameLayout refreshOverlay;
-    
-    private void createRefreshOverlay(WebView webView) {
-        refreshOverlay = new FrameLayout(this);
-        refreshOverlay.setVisibility(View.GONE);
-        
-        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyle);
-        spinner.setIndeterminate(true);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        );
-        lp.gravity = android.view.Gravity.CENTER_HORIZONTAL | android.view.Gravity.TOP;
-        lp.topMargin = dpToPx(16);
-        spinner.setLayoutParams(lp);
-        refreshOverlay.addView(spinner);
-        
-        ViewGroup parent = (ViewGroup) webView.getParent();
-        if (parent != null) {
-            parent.addView(refreshOverlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ));
-        }
-    }
-    
-    private void showRefreshOverlay() {
-        if (refreshOverlay == null) return;
-        refreshOverlay.setVisibility(View.VISIBLE);
-        refreshOverlay.setAlpha(1f);
-    }
-    
-    private void hideRefreshOverlay() {
-        if (refreshOverlay == null) return;
-        refreshOverlay.animate()
-            .alpha(0f)
-            .setDuration(250)
-            .withEndAction(new Runnable() {
-                @Override
-                public void run() {
-                    if (refreshOverlay != null) {
-                        refreshOverlay.setVisibility(View.GONE);
-                        refreshOverlay.setAlpha(1f);
-                    }
-                }
-            })
-            .start();
     }
     
     private int dpToPx(int dp) {
