@@ -3,19 +3,12 @@ package win.daniu.app;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.shapes.RoundRectShape;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.Gravity;
-import android.view.View;
-import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
-import android.widget.ImageButton;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.Bridge;
@@ -25,7 +18,6 @@ import com.getcapacitor.BridgeWebViewClient;
 public class MainActivity extends BridgeActivity {
     
     private boolean isRefreshing = false;
-    private ImageButton refreshBtn;
     
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -36,9 +28,6 @@ public class MainActivity extends BridgeActivity {
         if (bridge == null) return;
         
         final WebView webView = bridge.getWebView();
-        
-        // 创建右上角刷新按钮
-        createRefreshButton(webView);
         
         // 1. 禁止多窗口
         webView.getSettings().setSupportMultipleWindows(false);
@@ -56,9 +45,6 @@ public class MainActivity extends BridgeActivity {
                 if (newProgress == 100 && isRefreshing) {
                     isRefreshing = false;
                     Toast.makeText(MainActivity.this, "✅ 刷新完成", Toast.LENGTH_SHORT).show();
-                    if (refreshBtn != null) {
-                        refreshBtn.setImageResource(android.R.drawable.ic_menu_rotate);
-                    }
                 }
             }
         });
@@ -96,13 +82,27 @@ public class MainActivity extends BridgeActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 
-                // 注入 JS
+                // 注入 JS：拦截 _blank + window.open + 添加浮动刷新按钮
                 view.loadUrl(
                     "javascript:(function(){" +
+                    // 拦截 _blank 链接
                     "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
+                    // 拦截 window.open
                     "  window.open=function(url){window.location.href=url;return window;};" +
+                    // MutationObserver 拦截动态 _blank
                     "  var mo=new MutationObserver(function(muts){muts.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){if(n.tagName==='A'&&n.target==='_blank')n.removeAttribute('target');if(n.querySelectorAll)n.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target')});}});});});" +
                     "  mo.observe(document.documentElement,{childList:true,subtree:true});" +
+                    // 添加浮动刷新按钮
+                    "  if(!document.getElementById('__refreshBtn')){" +
+                    "    var btn=document.createElement('div');" +
+                    "    btn.id='__refreshBtn';" +
+                    "    btn.innerHTML='🔄';" +
+                    "    btn.style.cssText='position:fixed;top:16px;right:16px;z-index:2147483647;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);';" +
+                    "    btn.onclick=function(){" +
+                    "      window.location.reload();" +
+                    "    };" +
+                    "    document.body.appendChild(btn);" +
+                    "  }" +
                     "})()"
                 );
             }
@@ -127,49 +127,5 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
-    }
-    
-    /** 创建右上角刷新按钮 */
-    private void createRefreshButton(final WebView webView) {
-        refreshBtn = new ImageButton(this);
-        refreshBtn.setImageResource(android.R.drawable.ic_menu_rotate);
-        refreshBtn.setBackgroundColor(0x00000000);
-        refreshBtn.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-        refreshBtn.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
-        
-        final FrameLayout root = new FrameLayout(MainActivity.this);
-        root.setLayoutParams(new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ));
-        
-        // 点击刷新
-        refreshBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                isRefreshing = true;
-                Toast.makeText(MainActivity.this, "🔄 正在刷新...", Toast.LENGTH_SHORT).show();
-                webView.reload();
-            }
-        });
-        
-        // 找到内容视图并在其上叠加按钮
-        View contentView = findViewById(android.R.id.content);
-        if (contentView != null) {
-            ViewGroup parent = (ViewGroup) contentView.getParent();
-            if (parent != null) {
-                FrameLayout.LayoutParams btnParams = new FrameLayout.LayoutParams(
-                    dpToPx(48), dpToPx(48)
-                );
-                btnParams.gravity = Gravity.TOP | Gravity.END;
-                btnParams.topMargin = dpToPx(4);
-                btnParams.rightMargin = dpToPx(4);
-                parent.addView(refreshBtn, btnParams);
-            }
-        }
-    }
-    
-    private int dpToPx(int dp) {
-        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 }
