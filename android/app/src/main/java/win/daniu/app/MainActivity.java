@@ -1,24 +1,31 @@
 package win.daniu.app;
 
-import android.app.Activity;
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
-import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
+import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
     
-    private SwipeRefreshLayout swipeRefreshLayout;
+    /** 下拉刷新覆盖层 */
+    private FrameLayout refreshOverlay;
+    /** 是否正在刷新 */
+    private boolean isRefreshing = false;
     
+    @SuppressLint("SetJavaScriptEnabled")
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -28,48 +35,13 @@ public class MainActivity extends BridgeActivity {
         
         final WebView webView = bridge.getWebView();
         
-        // 把 WebView 包进 SwipeRefreshLayout（需要 AndroidX 库）
-        swipeRefreshLayout = new SwipeRefreshLayout(this);
-        swipeRefreshLayout.addView(webView);
-        swipeRefreshLayout.setColorSchemeResources(
-            android.R.color.holo_blue_bright,
-            android.R.color.holo_green_light,
-            android.R.color.holo_orange_light,
-            android.R.color.holo_red_light
-        );
+        // 创建下拉刷新覆盖层（转圈动画）
+        createRefreshOverlay(webView);
         
-        // 设置刷新监听
-        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
-            @Override
-            public void onRefresh() {
-                webView.reload(); // 强制刷新
-            }
-        });
-        
-        // WebView 加载完成时停止刷新动画
-        webView.setWebViewClient(new BridgeWebViewClient(bridge) {
-            @Override
-            public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
-            }
-            
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                // 页面加载完成就停止刷新动画
-                if (swipeRefreshLayout != null) {
-                    swipeRefreshLayout.setRefreshing(false);
-                }
-            }
-        });
-        
-        // 把 swipeRefreshLayout 设为主要内容
-        setContentView(swipeRefreshLayout);
-        
-        // 1. 禁止多窗口 — 防止 target="_blank" 触发新窗口
+        // 1. 禁止多窗口
         webView.getSettings().setSupportMultipleWindows(false);
         
-        // 2. 设置自定义 WebChromeClient — 拦截 onCreateWindow
+        // 2. 拦截 onCreateWindow（_blank 链接）
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
@@ -77,7 +49,7 @@ public class MainActivity extends BridgeActivity {
             }
         });
         
-        // 3. 自定义 WebViewClient — 拦截所有链接加载
+        // 3. 拦截所有 URL 加载
         webView.setWebViewClient(new BridgeWebViewClient(bridge) {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -102,11 +74,21 @@ public class MainActivity extends BridgeActivity {
             }
             
             @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                if (!isRefreshing) {
+                    isRefreshing = true;
+                    showRefreshOverlay();
+                }
+            }
+            
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (swipeRefreshLayout != null) {
-                    swipeRefreshLayout.setRefreshing(false);
-                }
+                isRefreshing = false;
+                hideRefreshOverlay();
+                
+                // 注入 JS：移除 _blank，拦截 window.open
                 view.loadUrl(
                     "javascript:(function(){" +
                     "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
@@ -119,7 +101,7 @@ public class MainActivity extends BridgeActivity {
         });
         
         // 4. 返回按钮处理
-        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -137,5 +119,58 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+    
+    /** 创建刷新覆盖层（不影响 Capacitor 视图层级） */
+    private void createRefreshOverlay(WebView webView) {
+        refreshOverlay = new FrameLayout(this);
+        refreshOverlay.setVisibility(View.GONE);
+        refreshOverlay.setBackgroundColor(0x00000000);
+        
+        ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyle);
+        spinner.setIndeterminate(true);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        lp.gravity = android.view.Gravity.CENTER_HORIZONTAL | android.view.Gravity.TOP;
+        lp.topMargin = dpToPx(16);
+        spinner.setLayoutParams(lp);
+        refreshOverlay.addView(spinner);
+        
+        ViewGroup parent = (ViewGroup) webView.getParent();
+        if (parent != null) {
+            parent.addView(refreshOverlay, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ));
+        }
+    }
+    
+    private void showRefreshOverlay() {
+        if (refreshOverlay == null) return;
+        refreshOverlay.setVisibility(View.VISIBLE);
+        refreshOverlay.setAlpha(1f);
+    }
+    
+    private void hideRefreshOverlay() {
+        if (refreshOverlay == null) return;
+        refreshOverlay.animate()
+            .alpha(0f)
+            .setDuration(250)
+            .withEndAction(new Runnable() {
+                @Override
+                public void run() {
+                    if (refreshOverlay != null) {
+                        refreshOverlay.setVisibility(View.GONE);
+                        refreshOverlay.setAlpha(1f);
+                    }
+                }
+            })
+            .start();
+    }
+    
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 }
