@@ -65,6 +65,15 @@ public class MainActivity extends BridgeActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 
+                // GitHub 下载链接 → 跳系统浏览器
+                if (url.contains("github.com") || url.contains("githubusercontent.com")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        startActivity(intent);
+                    } catch (Exception ignored) {}
+                    return true;
+                }
+                
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     view.loadUrl(url);
                     return true;
@@ -103,8 +112,11 @@ public class MainActivity extends BridgeActivity {
                     "javascript:(function(){" +
                     // 拦截 _blank 链接
                     "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
-                    // 拦截 window.open
-                    "  window.open=function(url){window.location.href=url;return window;};" +
+                    // 拦截 window.open，但 GitHub 链接跳系统浏览器
+                    "  window.open=function(url){" +
+                    "    if(url && (url.indexOf('github.com')!==-1||url.indexOf('githubusercontent.com')!==-1)){window.open(url,'_blank');return window;}" +
+                    "    window.location.href=url;return window;" +
+                    "  };" +
                     // MutationObserver 拦截动态 _blank
                     "  var mo=new MutationObserver(function(muts){muts.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){if(n.tagName==='A'&&n.target==='_blank')n.removeAttribute('target');if(n.querySelectorAll)n.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target')});}});});});" +
                     "  mo.observe(document.documentElement,{childList:true,subtree:true});" +
