@@ -2,19 +2,22 @@ package win.daniu.app;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebChromeClient;
 import android.webkit.WebViewClient;
-import androidx.activity.OnBackPressedCallback;
-import androidx.activity.OnBackPressedDispatcher;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
 public class MainActivity extends BridgeActivity {
+    
+    private SwipeRefreshLayout swipeRefreshLayout;
     
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -25,6 +28,44 @@ public class MainActivity extends BridgeActivity {
         
         final WebView webView = bridge.getWebView();
         
+        // 把 WebView 包进 SwipeRefreshLayout（需要 AndroidX 库）
+        swipeRefreshLayout = new SwipeRefreshLayout(this);
+        swipeRefreshLayout.addView(webView);
+        swipeRefreshLayout.setColorSchemeResources(
+            android.R.color.holo_blue_bright,
+            android.R.color.holo_green_light,
+            android.R.color.holo_orange_light,
+            android.R.color.holo_red_light
+        );
+        
+        // 设置刷新监听
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                webView.reload(); // 强制刷新
+            }
+        });
+        
+        // WebView 加载完成时停止刷新动画
+        webView.setWebViewClient(new BridgeWebViewClient(bridge) {
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+            }
+            
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                // 页面加载完成就停止刷新动画
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+            }
+        });
+        
+        // 把 swipeRefreshLayout 设为主要内容
+        setContentView(swipeRefreshLayout);
+        
         // 1. 禁止多窗口 — 防止 target="_blank" 触发新窗口
         webView.getSettings().setSupportMultipleWindows(false);
         
@@ -32,8 +73,6 @@ public class MainActivity extends BridgeActivity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, android.os.Message resultMsg) {
-                // 拦截所有新窗口请求（target="_blank" / window.open）
-                // 不创建新窗口，直接返回 false
                 return false;
             }
         });
@@ -44,13 +83,11 @@ public class MainActivity extends BridgeActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
                 
-                // http/https 链接 → 强制当前窗口加载
                 if (url.startsWith("http://") || url.startsWith("https://")) {
                     view.loadUrl(url);
                     return true;
                 }
                 
-                // tel:/mailto: 等特殊协议 → 用系统 app
                 if (url.startsWith("tel:") || url.startsWith("mailto:") ||
                     url.startsWith("sms:") || url.startsWith("geo:") ||
                     url.startsWith("whatsapp:") || url.startsWith("intent:")) {
@@ -67,7 +104,9 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                // 注入 JS：移除所有 _blank，拦截 window.open
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
                 view.loadUrl(
                     "javascript:(function(){" +
                     "  document.querySelectorAll('a[target=_blank]').forEach(function(a){a.removeAttribute('target');});" +
@@ -79,12 +118,11 @@ public class MainActivity extends BridgeActivity {
             }
         });
         
-        // 4. 载返回按钮处理：优先 WebView 回退
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+        // 4. 返回按钮处理
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 if (webView.canGoBack()) {
-                    // 检查当前 URL 是否是首页
                     String currentUrl = webView.getUrl();
                     String baseUrl = "https://daniu.win";
                     
@@ -92,10 +130,8 @@ public class MainActivity extends BridgeActivity {
                         !currentUrl.equals(baseUrl) && 
                         !currentUrl.equals(baseUrl + "/") &&
                         !currentUrl.equals(baseUrl + "/index.html")) {
-                        // 不是首页 → 回退到上一页
                         webView.goBack();
                     } else {
-                        // 已经是首页 → 回到 WebView 加载的首页
                         webView.loadUrl(baseUrl);
                     }
                 }
