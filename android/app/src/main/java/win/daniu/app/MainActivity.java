@@ -30,11 +30,9 @@ public class MainActivity extends BridgeActivity {
         
         final WebView webView = bridge.getWebView();
         
-        // 0. WebView 基础设置（修复 data:image;base64 不显示问题）
+        // 0. WebView 基础设置
         webView.getSettings().setAllowFileAccess(true);
         webView.getSettings().setAllowContentAccess(true);
-        // 强制每次从网络加载（避免缓存旧版 HTML）
-        webView.getSettings().setCacheMode(android.webkit.WebSettings.LOAD_NO_CACHE);
         // 允许混合内容（HTTP 图片在 HTTPS 页面）
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
             webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
