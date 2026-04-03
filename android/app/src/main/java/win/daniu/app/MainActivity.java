@@ -96,8 +96,8 @@ public class MainActivity extends BridgeActivity {
                     "  if(!document.getElementById('__refreshBtn')){" +
                     "    var btn=document.createElement('div');" +
                     "    btn.id='__refreshBtn';" +
-                    "    btn.innerHTML='🔄';" +
-                    "    btn.style.cssText='position:fixed;top:16px;right:16px;z-index:2147483647;width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);';" +
+                    "    btn.innerHTML='<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"white\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"23 4 23 10 17 10\"></polyline><polyline points=\"1 20 1 14 7 14\"></polyline><path d=\"M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15\"></path></svg>';" +
+                    "    btn.style.cssText='position:fixed;top:16px;right:16px;z-index:2147483647;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(102,126,234,0.4);border:none;outline:none;';" +
                     "    btn.onclick=function(){" +
                     "      window.location.reload();" +
                     "    };" +
