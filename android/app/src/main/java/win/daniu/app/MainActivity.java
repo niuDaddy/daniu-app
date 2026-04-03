@@ -92,6 +92,12 @@ public class MainActivity extends BridgeActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 
+                // 注入当前 APK 版本号到页面（window.__APP_VERSION__）
+                try {
+                    String versionName = getPackageManager().getApplicationInfo(getPackageName(), 0).metaData.getString("android:versionName");
+                    view.evaluateJavascript("javascript:(function(){window.__APP_VERSION__='"+versionName+"';})()", null);
+                } catch(Exception e) {}
+                
                 // 注入 JS：拦截 _blank + window.open + 添加浮动刷新按钮
                 view.loadUrl(
                     "javascript:(function(){" +

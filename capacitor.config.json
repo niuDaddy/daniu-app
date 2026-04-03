@@ -1,6 +1,7 @@
 {
   "appId": "win.daniu.app",
   "appName": "大牛の家",
+  "android": {},
   "webDir": "www",
   "server": {
     "url": "https://daniu.win",
